@@ -7,7 +7,6 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
-            /* COLORES DE TU IMAGEN ORIGINAL */
             --header-bg: #2180a1; 
             --header-bg-gradient: linear-gradient(90deg, #2180a1 0%, #32b8c6 100%);
             --light-bg: #f4f6f9;
@@ -25,30 +24,27 @@
         }
         .container { max-width: 1350px; margin: 0 auto; }
 
-        /* HEADER MODIFICADO: LOGO GRANDE Y ARRIBA */
         header { 
             display: flex; 
-            flex-direction: column; /* Elementos uno debajo del otro */
+            flex-direction: column; 
             align-items: center; 
             justify-content: center; 
             margin-bottom: 35px; 
             text-align: center;
         }
         .logo-img { 
-            height: 90px; /* MÁS GRANDE */
+            height: 90px; 
             width: auto; 
-            margin-bottom: 15px; /* Espacio entre logo y titulo */
+            margin-bottom: 15px; 
         }
         header h1 { color: var(--header-bg); font-size: 2.2em; font-weight: 700; margin: 0; }
         header p { color: #666; margin-top: 5px; font-size: 1.1em; }
 
-        /* ESTADISTICAS */
         .stats { display: flex; gap: 15px; margin-bottom: 20px; justify-content: space-between; }
         .stat-card { background: white; flex: 1; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; border-bottom: 3px solid var(--header-bg); }
         .stat-card h3 { font-size: 0.8em; color: #777; margin-bottom: 5px; font-weight: 600; text-transform: uppercase; }
         .stat-card .number { font-size: 1.5em; font-weight: 700; color: var(--text-dark); }
 
-        /* CONTROLES */
         .controls { display: flex; gap: 10px; margin-bottom: 15px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); align-items: center; }
         .search-box { flex: 1; }
         .search-box input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 1em; }
@@ -61,7 +57,6 @@
         .btn-secondary { background: #6c757d; }
         .btn-folder { background: #e67e22; }
 
-        /* TABLA */
         .table-container { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         table { width: 100%; border-collapse: collapse; min-width: 1000px; }
         
@@ -72,15 +67,14 @@
         tbody tr:last-child td { border-bottom: none; }
         tbody tr:hover { background-color: #f8f9fa; }
 
-        /* ESTILO NUEVO PARA GESTIONES (COMO TU IMAGEN) */
         .gestion-cell { display: flex; flex-wrap: wrap; gap: 5px; }
         .tag { 
             font-size: 0.85em; 
             padding: 4px 12px; 
-            border-radius: 20px; /* Borde muy redondeado (pastilla) */
-            background: #f1f8e9; /* Fondo verde muy claro */
-            color: #33691e;      /* Letra verde oscura */
-            border: 1px solid #dcedc8; /* Borde verde suave */
+            border-radius: 20px; 
+            background: #f1f8e9; 
+            color: #33691e;      
+            border: 1px solid #dcedc8; 
             width: fit-content; 
             display: inline-block; 
             white-space: nowrap;
@@ -90,7 +84,6 @@
         .actions { display: flex; gap: 5px; }
         .btn-sm { padding: 5px 8px; font-size: 0.8em; }
 
-        /* MODALES */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
         .modal.active { display: flex; }
         .modal-content { background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 25px; position: relative; }
@@ -105,13 +98,11 @@
         label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; color: #555; }
         input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
 
-        /* LISTA GESTIONES DENTRO DEL MODAL */
         .historial-list { border: 1px solid #eee; border-radius: 4px; max-height: 300px; overflow-y: auto; }
         .historial-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
         .historial-item:last-child { border-bottom: none; }
         .historial-item:hover { background: #f9f9f9; }
 
-        /* UTILIDADES */
         .loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
         .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top: 4px solid var(--header-bg); border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -210,8 +201,8 @@
                             <input type="date" id="gFecha">
                         </div>
                         <div class="form-group">
-                            <label>Evidencia (PDF - Nombre)</label>
-                            <input type="file" id="gArchivo">
+                            <label>Evidencia (PDF - Máx 5MB)</label>
+                            <input type="file" id="gArchivo" accept="application/pdf">
                         </div>
                         <div class="form-group">
                             <label>Notas</label>
@@ -266,10 +257,8 @@
             );
 
             filtered.forEach((sede, idx) => {
-                // Preparar resumen de gestiones ESTILO IMAGEN ADJUNTA
                 let gestionHTML = '<span class="tag empty">Sin gestiones</span>';
                 if (sede.gestiones && sede.gestiones.length > 0) {
-                    // Agrupar por tipo para mostrar "1 Mantenimiento", "2 Supervisiones", etc.
                     const counts = {};
                     sede.gestiones.forEach(g => {
                         counts[g.tipo] = (counts[g.tipo] || 0) + 1;
@@ -323,6 +312,17 @@
             container.innerHTML = list.map(g => {
                 let fecha = g.fecha;
                 if(fecha && fecha.toString().includes('T')) fecha = fecha.toString().split('T')[0];
+                
+                let archivoLink = '';
+                if(g.archivo && g.archivo !== 'N/A') {
+                    // Si es un enlace a Drive, lo hacemos clickeable
+                    if(g.archivo.startsWith('http')) {
+                        archivoLink = `<a href="${g.archivo}" target="_blank" style="color: #e67e22; text-decoration: none;">📎 Ver PDF</a>`;
+                    } else {
+                        archivoLink = `📎 ${g.archivo}`;
+                    }
+                }
+
                 return `
                 <div class="historial-item">
                     <div>
@@ -330,7 +330,7 @@
                         <div style="font-size:0.85em; color:#666">${fecha}</div>
                         <div style="font-size:0.85em; font-style:italic">${g.notas || ''}</div>
                     </div>
-                    ${g.archivo ? '📎' : ''}
+                    <div>${archivoLink}</div>
                 </div>`;
             }).join('');
         }
@@ -348,30 +348,62 @@
 
             document.getElementById('loader').style.display = 'flex';
 
-            const payload = {
-                action: 'addGestion',
-                password: pass,
-                sedeNumero: currentSedeId,
-                tipo: tipo,
-                fecha: fecha,
-                fileName: archivoInput.files.length > 0 ? archivoInput.files[0].name : "N/A",
-                notas: notas
-            };
+            let fileData = null;
+            let mimeType = null;
+            let fileName = "N/A";
 
-            try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const json = await res.json();
-                
-                if(json.status === 'success') {
-                    showToast("Gestión guardada");
-                    document.getElementById('formGestion').reset();
-                    document.getElementById('modalGestiones').classList.remove('active');
-                    loadData(); 
-                } else {
-                    alert(json.message);
+            async function enviarDatos() {
+                const payload = {
+                    action: 'addGestion',
+                    password: pass,
+                    sedeNumero: currentSedeId,
+                    tipo: tipo,
+                    fecha: fecha,
+                    fileName: fileName,
+                    fileData: fileData,
+                    mimeType: mimeType,
+                    notas: notas
+                };
+
+                try {
+                    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                    const json = await res.json();
+                    
+                    if(json.status === 'success') {
+                        showToast("Gestión y archivo guardados");
+                        document.getElementById('formGestion').reset();
+                        document.getElementById('modalGestiones').classList.remove('active');
+                        loadData(); 
+                    } else {
+                        alert(json.message);
+                    }
+                } catch(e) { console.error(e); alert("Error guardando la gestión"); }
+                finally { document.getElementById('loader').style.display = 'none'; }
+            }
+
+            if (archivoInput.files.length > 0) {
+                const file = archivoInput.files[0];
+                if (file.size > 5 * 1024 * 1024) {
+                    document.getElementById('loader').style.display = 'none';
+                    return alert("El archivo es muy pesado. Máximo 5MB.");
                 }
-            } catch(e) { console.error(e); alert("Error guardando"); }
-            finally { document.getElementById('loader').style.display = 'none'; }
+
+                fileName = file.name;
+                mimeType = file.type;
+
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = function() {
+                    fileData = reader.result.split(',')[1]; 
+                    enviarDatos(); 
+                };
+                reader.onerror = function() {
+                    document.getElementById('loader').style.display = 'none';
+                    alert("Error leyendo el archivo.");
+                };
+            } else {
+                enviarDatos();
+            }
         }
 
         // --- SEDES CRUD ---
@@ -473,7 +505,6 @@
 
         document.getElementById('searchInput').addEventListener('input', renderTable);
         
-        // INICIAR
         loadData();
     </script>
 </body>
