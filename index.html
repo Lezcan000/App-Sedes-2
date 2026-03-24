@@ -3,6 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- ETIQUETAS ANTI-CACHÉ: Obligan al navegador a mostrar siempre la última versión -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <!-- ------------------------------------------------------------------------ -->
+
     <title>Gestor de Sedes - Alcaldía</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -58,7 +65,8 @@
         .tag.orange { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
         .tag.green { background: #f1f8e9; color: #33691e; border: 1px solid #dcedc8; }
         .tag.purple { background: #f3e5f5; color: #4a148c; border: 1px solid #e1bee7; }
-        .tag.red { background: #ffebee; color: #b71c1c; border: 1px solid #ffcdd2; }
+        /* Color Cian/Teal para Servicios Públicos (No es de alerta) */
+        .tag.teal { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
 
         .actions { display: flex; gap: 5px; }
         .btn-sm { padding: 5px 8px; font-size: 0.8em; }
@@ -243,12 +251,12 @@
 
                     gestionHTML = '<div class="gestion-cell">';
                     Object.entries(counts).forEach(([tipo, cant]) => {
-                        // REGLAS DE COLORES PARA LAS GESTIONES
+                        // REGLAS DE COLORES
                         let colorClass = 'tag';
                         if(tipo.includes('Mantenimiento')) colorClass += ' orange';
                         else if(tipo.includes('Supervisión')) colorClass += ' green';
                         else if(tipo.includes('Comodato')) colorClass += ' purple';
-                        else if(tipo.includes('Servicios') || tipo.includes('Pago')) colorClass += ' red';
+                        else if(tipo.includes('Servicios') || tipo.includes('Pago')) colorClass += ' teal'; // Usamos el color Teal
                         else colorClass += ' blue';
 
                         gestionHTML += `<span class="${colorClass}">${cant} ${tipo}</span>`;
@@ -279,7 +287,6 @@
             });
         }
 
-        // --- GESTIONES ---
         function openGestiones(id) {
             currentSedeId = id;
             const sede = allData.find(s => s.numero == id);
@@ -327,7 +334,8 @@
         }
 
         async function borrarGestion(tipo, notas) {
-            if(!confirm("¿Seguro que deseas eliminar el registro de esta gestión?\n(Nota: El archivo PDF en Drive no se borrará)")) return;
+            // MENSAJE DE ADVERTENCIA ACTUALIZADO
+            if(!confirm("¿Seguro que deseas eliminar el registro de esta gestión?\n\n(Si fue subida desde la web, también se borrará el PDF de tu Drive. Si fue por formulario, el PDF se conservará)")) return;
             const pass = prompt("🔐 Contraseña:");
             if(!pass) return;
 
@@ -344,7 +352,7 @@
                 const json = await res.json();
                 
                 if(json.status === 'success') {
-                    showToast("Gestión eliminada");
+                    showToast(json.message || "Gestión eliminada");
                     document.getElementById('modalGestiones').classList.remove('active');
                     loadData(); 
                 } else {
