@@ -251,12 +251,14 @@
 
                     gestionHTML = '<div class="gestion-cell">';
                     Object.entries(counts).forEach(([tipo, cant]) => {
-                        // REGLAS DE COLORES
+                        // REGLAS DE COLORES - ACTUALIZADO CON TOLERANCIA A MAYÚSCULAS/MINÚSCULAS
                         let colorClass = 'tag';
-                        if(tipo.includes('Mantenimiento')) colorClass += ' orange';
-                        else if(tipo.includes('Supervisión')) colorClass += ' green';
-                        else if(tipo.includes('Comodato')) colorClass += ' purple';
-                        else if(tipo.includes('Servicios') || tipo.includes('Pago')) colorClass += ' teal'; // Usamos el color Teal
+                        const tipoLower = tipo.toLowerCase(); // Convierte todo a minúscula para evitar errores
+                        
+                        if(tipoLower.includes('mantenimiento')) colorClass += ' orange';
+                        else if(tipoLower.includes('supervisión') || tipoLower.includes('supervision')) colorClass += ' green';
+                        else if(tipoLower.includes('comodato')) colorClass += ' purple';
+                        else if(tipoLower.includes('servicios') || tipoLower.includes('pago')) colorClass += ' teal'; // Usamos el color Teal (Verde-azulado)
                         else colorClass += ' blue';
 
                         gestionHTML += `<span class="${colorClass}">${cant} ${tipo}</span>`;
