@@ -4,11 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- ETIQUETAS ANTI-CACHÉ: Obligan al navegador a mostrar siempre la última versión -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <!-- ------------------------------------------------------------------------ -->
 
     <title>Gestor de Sedes - Alcaldía</title>
     <style>
@@ -48,7 +46,7 @@
         .btn-secondary { background: #6c757d; }
         .btn-folder { background: #e67e22; }
 
-        .table-container { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .table-container { background: white; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         table { width: 100%; border-collapse: collapse; min-width: 1000px; }
         thead { background: var(--header-bg-gradient); color: white; }
         th { padding: 15px; text-align: left; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
@@ -58,14 +56,12 @@
 
         .gestion-cell { display: flex; flex-wrap: wrap; gap: 5px; }
         
-        /* --- COLORES PARA LAS GESTIONES --- */
         .tag { font-size: 0.85em; padding: 4px 12px; border-radius: 20px; width: fit-content; display: inline-block; white-space: nowrap; }
         .tag.empty { background: transparent; border: none; color: #aaa; font-style: italic; }
         .tag.blue { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
         .tag.orange { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
         .tag.green { background: #f1f8e9; color: #33691e; border: 1px solid #dcedc8; }
         .tag.purple { background: #f3e5f5; color: #4a148c; border: 1px solid #e1bee7; }
-        /* Color Cian/Teal para Servicios Públicos (No es de alerta) */
         .tag.teal { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
 
         .actions { display: flex; gap: 5px; }
@@ -209,12 +205,22 @@
     </div>
 
     <script>
-        // --- CONFIGURACIÓN ---
         const API_URL = "https://script.google.com/macros/s/AKfycbw0DaNH-5gHedVrBePcDpmM4IjMleOZ7xpkviSfVAJ8TeKLdqyqEYS3noT39Lm9YdSh/exec"; 
 
         let allData = []; 
         let currentSedeId = null;
         let isEditing = false;
+
+        // Función purificadora para evitar códigos maliciosos o errores de formato
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
 
         async function loadData() {
             document.getElementById('loader').style.display = 'flex';
@@ -251,36 +257,43 @@
 
                     gestionHTML = '<div class="gestion-cell">';
                     Object.entries(counts).forEach(([tipo, cant]) => {
-                        // REGLAS DE COLORES - ACTUALIZADO CON TOLERANCIA A MAYÚSCULAS/MINÚSCULAS
                         let colorClass = 'tag';
-                        const tipoLower = tipo.toLowerCase(); // Convierte todo a minúscula para evitar errores
+                        const tipoLower = tipo.toLowerCase();
                         
                         if(tipoLower.includes('mantenimiento')) colorClass += ' orange';
                         else if(tipoLower.includes('supervisión') || tipoLower.includes('supervision')) colorClass += ' green';
                         else if(tipoLower.includes('comodato')) colorClass += ' purple';
-                        else if(tipoLower.includes('servicios') || tipoLower.includes('pago')) colorClass += ' teal'; // Usamos el color Teal (Verde-azulado)
+                        else if(tipoLower.includes('servicios') || tipoLower.includes('pago')) colorClass += ' teal';
                         else colorClass += ' blue';
 
-                        gestionHTML += `<span class="${colorClass}">${cant} ${tipo}</span>`;
+                        // Escapamos también el tipo por seguridad
+                        gestionHTML += `<span class="${colorClass}">${cant} ${escapeHTML(tipo)}</span>`;
                     });
                     gestionHTML += '</div>';
                 }
 
+                // Aplicamos el filtro purificador a todos los textos de la tabla
+                const safeNombre = escapeHTML(sede.nombre);
+                const safeComuna = escapeHTML(sede.comuna);
+                const safeDireccion = escapeHTML(sede.direccion);
+                const safeUso = escapeHTML(sede.uso);
+                const safeOcupante = escapeHTML(sede.ocupante);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><b>${sede.numero}</b></td>
-                    <td style="font-weight:bold; color:#2c3e50">${sede.nombre}</td>
-                    <td>${sede.comuna}</td>
+                    <td style="font-weight:bold; color:#2c3e50">${safeNombre}</td>
+                    <td>${safeComuna}</td>
                     <td>
-                        <div>${sede.direccion}</div>
-                        <div style="font-size:0.85em; color:#777; margin-top:3px">${sede.uso}</div>
+                        <div>${safeDireccion}</div>
+                        <div style="font-size:0.85em; color:#777; margin-top:3px">${safeUso}</div>
                     </td>
-                    <td><small>${sede.ocupante || '-'}</small></td>
+                    <td><small>${safeOcupante || '-'}</small></td>
                     <td>${gestionHTML}</td>
                     <td>
                         <div class="actions">
                             <button class="btn btn-folder btn-sm" onclick="openGestiones(${sede.numero})" title="Ver Gestiones">📂</button>
-                            <button class="btn btn-secondary btn-sm" onclick="openEdit(${allData.indexOf(sede)})" title="Editar">✏️</button>
+                            <button class="btn btn-secondary btn-sm" onclick="openEdit(${sede.numero})" title="Editar">✏️</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteSede(${sede.numero})" title="Borrar">🗑️</button>
                         </div>
                     </td>
@@ -312,20 +325,27 @@
                     let links = g.archivo.split(',');
                     archivoLink = links.map(link => {
                         let url = link.trim();
-                        if(url.startsWith('http')) return `<a href="${url}" target="_blank" style="color: #e67e22; text-decoration: none; display: inline-block;">📎 Ver PDF</a>`;
-                        else return `<span>📎 ${url}</span>`;
+                        // Escapamos la URL para evitar ataques de inyección de enlaces
+                        let safeUrl = escapeHTML(url);
+                        if(safeUrl.startsWith('http')) return `<a href="${safeUrl}" target="_blank" style="color: #e67e22; text-decoration: none; display: inline-block;">📎 Ver PDF</a>`;
+                        else return `<span>📎 ${safeUrl}</span>`;
                     }).join('<br>');
                 }
 
-                const safeTipo = g.tipo ? g.tipo.replace(/'/g, "\\'") : '';
-                const safeNotas = g.notas ? g.notas.replace(/'/g, "\\'") : '';
+                // Escapamos los textos visibles en el historial
+                const tipoVisible = escapeHTML(g.tipo);
+                const notasVisibles = escapeHTML(g.notas);
+                
+                // Mantenemos esta variable interna segura para la función de borrar
+                const safeTipo = g.tipo ? g.tipo.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
+                const safeNotas = g.notas ? g.notas.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
 
                 return `
                 <div class="historial-item">
                     <div>
-                        <div style="font-weight:bold; color:#2180a1">${g.tipo}</div>
+                        <div style="font-weight:bold; color:#2180a1">${tipoVisible}</div>
                         <div style="font-size:0.85em; color:#666">${fecha}</div>
-                        <div style="font-size:0.85em; font-style:italic">${g.notas || ''}</div>
+                        <div style="font-size:0.85em; font-style:italic">${notasVisibles}</div>
                     </div>
                     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                         ${archivoLink}
@@ -336,20 +356,13 @@
         }
 
         async function borrarGestion(tipo, notas) {
-            // MENSAJE DE ADVERTENCIA ACTUALIZADO
             if(!confirm("¿Seguro que deseas eliminar el registro de esta gestión?\n\n(Si fue subida desde la web, también se borrará el PDF de tu Drive. Si fue por formulario, el PDF se conservará)")) return;
             const pass = prompt("🔐 Contraseña:");
             if(!pass) return;
 
             document.getElementById('loader').style.display = 'flex';
             try {
-                const payload = {
-                    action: 'deleteGestion',
-                    password: pass,
-                    sedeNumero: currentSedeId,
-                    tipo: tipo,
-                    notas: notas
-                };
+                const payload = { action: 'deleteGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, notas: notas };
                 const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
                 const json = await res.json();
                 
@@ -357,9 +370,7 @@
                     showToast(json.message || "Gestión eliminada");
                     document.getElementById('modalGestiones').classList.remove('active');
                     loadData(); 
-                } else {
-                    alert(json.message);
-                }
+                } else alert(json.message);
             } catch(e) { alert("Error al eliminar"); }
             finally { document.getElementById('loader').style.display = 'none'; }
         }
@@ -378,10 +389,7 @@
             let fileData = null; let mimeType = null; let fileName = "N/A";
 
             async function enviarDatos() {
-                const payload = {
-                    action: 'addGestion', password: pass, sedeNumero: currentSedeId,
-                    tipo: tipo, fecha: fecha, fileName: fileName, fileData: fileData, mimeType: mimeType, notas: notas
-                };
+                const payload = { action: 'addGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, fecha: fecha, fileName: fileName, fileData: fileData, mimeType: mimeType, notas: notas };
                 try {
                     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
                     const json = await res.json();
@@ -405,7 +413,6 @@
             } else enviarDatos();
         }
 
-        // --- SEDES CRUD ---
         function openSedeModal() {
             isEditing = false;
             document.getElementById('modalSedeTitle').textContent = "Nueva Sede";
@@ -415,9 +422,12 @@
             document.getElementById('modalSede').classList.add('active');
         }
 
-        function openEdit(idx) {
+        // CORRECCIÓN: Ahora recibe el número (ID) de la sede, no la posición del array
+        function openEdit(id) {
             isEditing = true;
-            const s = allData[idx];
+            const s = allData.find(x => x.numero == id);
+            if(!s) return alert("Error al encontrar la sede");
+            
             document.getElementById('modalSedeTitle').textContent = "Editar Sede";
             document.getElementById('originalNumero').value = s.numero;
             document.getElementById('numero').value = s.numero;
