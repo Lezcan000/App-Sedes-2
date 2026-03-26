@@ -63,7 +63,6 @@
         .tag.green { background: #f1f8e9; color: #33691e; border: 1px solid #dcedc8; }
         .tag.purple { background: #f3e5f5; color: #4a148c; border: 1px solid #e1bee7; }
         .tag.teal { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
-        /* NUEVO COLOR ROJO PARA TASA DE SEGURIDAD */
         .tag.red { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
 
         .actions { display: flex; gap: 5px; }
@@ -229,6 +228,7 @@
             document.getElementById('loader').style.display = 'flex';
             try {
                 const res = await fetch(API_URL);
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
                 const data = await res.json();
                 if(Array.isArray(data)) {
                     allData = data;
@@ -237,7 +237,7 @@
                 }
             } catch(e) {
                 console.error(e);
-                alert("Error cargando datos. Revisa la conexión.");
+                alert("Error de conexión. Es posible que el servidor esté saturado, inténtalo de nuevo.");
             } finally {
                 document.getElementById('loader').style.display = 'none';
             }
@@ -263,7 +263,6 @@
                         let colorClass = 'tag';
                         const tipoLower = tipo.toLowerCase();
                         
-                        // LÓGICA DE COLORES ACTUALIZADA
                         if(tipoLower.includes('mantenimiento')) colorClass += ' orange';
                         else if(tipoLower.includes('supervisión') || tipoLower.includes('supervision')) colorClass += ' green';
                         else if(tipoLower.includes('comodato')) colorClass += ' purple';
@@ -319,6 +318,8 @@
                 container.innerHTML = '<p style="text-align:center; color:#999; padding:10px;">No hay documentos.</p>';
                 return;
             }
+            
+            // Renderizamos el HTML asignando data-attributes en lugar de onclick (MEJORA DE SEGURIDAD XSS)
             container.innerHTML = list.map(g => {
                 let fecha = g.fecha;
                 if(fecha && fecha.toString().includes('T')) fecha = fecha.toString().split('T')[0];
@@ -336,9 +337,6 @@
 
                 const tipoVisible = escapeHTML(g.tipo);
                 const notasVisibles = escapeHTML(g.notas);
-                
-                const safeTipo = g.tipo ? g.tipo.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
-                const safeNotas = g.notas ? g.notas.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
 
                 return `
                 <div class="historial-item">
@@ -349,10 +347,26 @@
                     </div>
                     <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
                         ${archivoLink}
-                        <button onclick="borrarGestion('${safeTipo}', '${safeNotas}')" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size:0.85em; font-weight:bold;">🗑️ Borrar</button>
+                        <button class="btn-delete-gestion" data-tipo="${tipoVisible}" data-notas="${notasVisibles}" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size:0.85em; font-weight:bold;">🗑️ Borrar</button>
                     </div>
                 </div>`;
             }).join('');
+
+            // Asignamos los eventos de click de forma segura (MEJORA DE SEGURIDAD XSS)
+            const deleteBtns = container.querySelectorAll('.btn-delete-gestion');
+            deleteBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Extraemos los datos crudos del elemento seguro
+                    const rawTipo = this.getAttribute('data-tipo');
+                    const rawNotas = this.getAttribute('data-notas');
+                    
+                    // Decodificamos el HTML escape para enviar la cadena original a la función borrarGestion
+                    const decodedTipo = rawTipo.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+                    const decodedNotas = rawNotas.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+                    
+                    borrarGestion(decodedTipo, decodedNotas);
+                });
+            });
         }
 
         async function borrarGestion(tipo, notas) {
@@ -364,6 +378,7 @@
             try {
                 const payload = { action: 'deleteGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, notas: notas };
                 const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
                 const json = await res.json();
                 
                 if(json.status === 'success') {
@@ -371,7 +386,7 @@
                     document.getElementById('modalGestiones').classList.remove('active');
                     loadData(); 
                 } else alert(json.message);
-            } catch(e) { alert("Error al eliminar"); }
+            } catch(e) { alert("Error al eliminar. Revisa tu conexión."); }
             finally { document.getElementById('loader').style.display = 'none'; }
         }
 
@@ -392,6 +407,7 @@
                 const payload = { action: 'addGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, fecha: fecha, fileName: fileName, fileData: fileData, mimeType: mimeType, notas: notas };
                 try {
                     const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
                     const json = await res.json();
                     if(json.status === 'success') {
                         showToast("Gestión guardada");
@@ -399,7 +415,7 @@
                         document.getElementById('modalGestiones').classList.remove('active');
                         loadData(); 
                     } else alert(json.message);
-                } catch(e) { alert("Error guardando la gestión"); }
+                } catch(e) { alert("Error guardando la gestión. Revisa tu conexión."); }
                 finally { document.getElementById('loader').style.display = 'none'; }
             }
 
@@ -453,10 +469,11 @@
             document.getElementById('loader').style.display = 'flex';
             try {
                 const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
                 const json = await res.json();
                 if(json.status === 'success') { showToast("Guardado con éxito"); closeModal('modalSede'); loadData(); }
                 else alert(json.message);
-            } catch(e) { alert("Error de red"); }
+            } catch(e) { alert("Error de red de conexión."); }
             finally { document.getElementById('loader').style.display = 'none'; }
         }
 
@@ -467,10 +484,11 @@
             document.getElementById('loader').style.display = 'flex';
             try {
                 const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({action:'delete', password:pass, numero:id}) });
+                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
                 const json = await res.json();
                 if(json.status === 'success') { showToast("Eliminado"); loadData(); }
                 else alert(json.message);
-            } catch(e) { alert("Error"); }
+            } catch(e) { alert("Error de conexión al intentar eliminar."); }
             finally { document.getElementById('loader').style.display = 'none'; }
         }
 
