@@ -1,525 +1,155 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+const PASSWORD_SECRET = "medellin2025"; 
+const SHEET_ID = "11D8QUia5wORKRPB8vo6PEWPLo4X6E1U-FeZaAZn8sOA";
 
-    <title>Gestor de Sedes - Alcaldía</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --header-bg: #2180a1; 
-            --header-bg-gradient: linear-gradient(90deg, #2180a1 0%, #32b8c6 100%);
-            --light-bg: #f4f6f9;
-            --text-dark: #2c3e50;
-            --border: #e1e4e8;
-            --success: #28a745;
-            --warning: #ffc107;
-            --danger: #dc3545;
-        }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--light-bg); color: var(--text-dark); padding: 20px; }
-        .container { max-width: 1350px; margin: 0 auto; }
+const ID_MAESTRA = "1VxpNC80wrfe9mXgxufcDBdCfvJ4x7SWf"; 
+const ID_PLAN_ACCION = "1jQNVCeGtukT1kGo-OivlJD2Qy2CROQUC"; 
+const ID_PLAN_INDICATIVO = "1MwupCHIIZmIdstTBAizTPSwGUe9raJeq"; 
 
-        header { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 35px; text-align: center; }
-        .logo-img { height: 90px; width: auto; margin-bottom: 15px; }
-        header h1 { color: var(--header-bg); font-size: 2.2em; font-weight: 700; margin: 0; }
-        header p { color: #666; margin-top: 5px; font-size: 1.1em; }
+function ConfigurarPermisos() {
+  SpreadsheetApp.openById(SHEET_ID);
+  DriveApp.getFolderById(ID_MAESTRA); DriveApp.getFolderById(ID_PLAN_ACCION); DriveApp.getFolderById(ID_PLAN_INDICATIVO);
+}
 
-        .stats { display: flex; gap: 15px; margin-bottom: 20px; justify-content: space-between; }
-        .stat-card { background: white; flex: 1; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; border-bottom: 3px solid var(--header-bg); }
-        .stat-card h3 { font-size: 0.8em; color: #777; margin-bottom: 5px; font-weight: 600; text-transform: uppercase; }
-        .stat-card .number { font-size: 1.5em; font-weight: 700; color: var(--text-dark); }
+function doGet(e) { return handleRequest(e); }
+function doPost(e) { return handleRequest(e); }
 
-        .controls { display: flex; gap: 10px; margin-bottom: 15px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); align-items: center; }
-        .search-box { flex: 1; }
-        .search-box input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-size: 1em; }
+function handleRequest(e) {
+  const lock = LockService.getScriptLock(); lock.tryLock(10000);
+
+  try {
+    const doc = SpreadsheetApp.openById(SHEET_ID);
+    const sheetSedes = doc.getSheetByName("Sedes") || doc.getSheets()[0]; 
+    let sheetGestiones = doc.getSheetByName("Gestiones");
+
+    if (!sheetGestiones) { sheetGestiones = doc.insertSheet("Gestiones"); sheetGestiones.appendRow(["sede_id", "tipo", "fecha", "archivo", "notas"]); }
+
+    let params = e.parameter || {};
+    if (e.postData && e.postData.contents) { try { params = {...params, ...JSON.parse(e.postData.contents)}; } catch(err) {} }
+
+    if (!params.action || params.action === 'read') {
+      const dataSedes = sheetSedes.getDataRange().getValues(); dataSedes.shift(); 
+      const dataGestiones = sheetGestiones.getDataRange().getValues(); dataGestiones.shift(); 
+
+      const gestionesMap = {};
+      dataGestiones.forEach(row => {
+        const id = row[0]; if(!gestionesMap[id]) gestionesMap[id] = [];
         
-        .btn { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: 600; font-size: 0.9em; display: flex; align-items: center; gap: 5px; transition: 0.2s; }
-        .btn:hover { opacity: 0.9; }
-        .btn-primary { background: var(--header-bg); }
-        .btn-success { background: var(--success); }
-        .btn-danger { background: var(--danger); }
-        .btn-secondary { background: #6c757d; }
-        .btn-folder { background: #e67e22; }
-
-        .table-container { background: white; border-radius: 8px; overflow-x: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-        thead { background: var(--header-bg-gradient); color: white; }
-        th { padding: 15px; text-align: left; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-        td { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 0.9em; vertical-align: top; }
-        tbody tr:last-child td { border-bottom: none; }
-        tbody tr:hover { background-color: #f8f9fa; }
-
-        .gestion-cell { display: flex; flex-wrap: wrap; gap: 5px; }
+        // --- NUEVO: FORMATEO ESTRICTO DE FECHA PARA LA WEB ---
+        let fechaSegura = row[2];
+        if (fechaSegura instanceof Date) {
+          fechaSegura = Utilities.formatDate(fechaSegura, "GMT-5", "yyyy-MM-dd");
+        } else if (fechaSegura) {
+          fechaSegura = String(fechaSegura).split('T')[0]; 
+        }
         
-        .tag { font-size: 0.85em; padding: 4px 12px; border-radius: 20px; width: fit-content; display: inline-block; white-space: nowrap; }
-        .tag.empty { background: transparent; border: none; color: #aaa; font-style: italic; }
-        .tag.blue { background: #e3f2fd; color: #0d47a1; border: 1px solid #bbdefb; }
-        .tag.orange { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; }
-        .tag.green { background: #f1f8e9; color: #33691e; border: 1px solid #dcedc8; }
-        .tag.purple { background: #f3e5f5; color: #4a148c; border: 1px solid #e1bee7; }
-        .tag.teal { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
-        .tag.red { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+        gestionesMap[id].push({ tipo: row[1], fecha: fechaSegura, archivo: row[3], notas: row[4] });
+      });
 
-        .actions { display: flex; gap: 5px; }
-        .btn-sm { padding: 5px 8px; font-size: 0.8em; }
+      const result = dataSedes.map((row) => { return { numero: row[0], nombre: row[1], comuna: row[2], direccion: row[3], uso: row[4], ocupante: row[5], observaciones: row[6], gestiones: gestionesMap[row[0]] || [] }; }).filter(r => r.nombre !== ""); 
+      return sendJSON(result);
+    }
 
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal.active { display: flex; }
-        .modal-content { background: white; border-radius: 8px; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; padding: 25px; position: relative; }
-        .modal-content.wide { max-width: 850px; }
-        .close-btn { position: absolute; top: 15px; right: 20px; border: none; background: none; font-size: 1.5em; cursor: pointer; color: #999; }
-        h2.modal-title { margin-top: 0; color: var(--header-bg); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        
-        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .form-group { margin-bottom: 15px; }
-        .form-group.full { grid-column: 1 / -1; }
-        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9em; color: #555; }
-        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    if (params.password !== PASSWORD_SECRET) return sendJSON({ status: 'error', message: 'Contraseña incorrecta' });
 
-        .historial-list { border: 1px solid #eee; border-radius: 4px; max-height: 300px; overflow-y: auto; }
-        .historial-item { padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
-        .historial-item:last-child { border-bottom: none; }
-        .historial-item:hover { background: #f9f9f9; }
+    // --- AGREGAR GESTIÓN ---
+    if (params.action === 'addGestion') {
+      let fileUrl = "N/A"; let sedeNombre = "Sede_Desconocida";
+      const dataSedes = sheetSedes.getDataRange().getValues();
+      for(let i=1; i<dataSedes.length; i++) { if(String(dataSedes[i][0]) === String(params.sedeNumero)) { sedeNombre = String(dataSedes[i][1]).trim(); break; } }
 
-        .loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 2000; display: none; justify-content: center; align-items: center; flex-direction: column; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top: 4px solid var(--header-bg); border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .toast { position: fixed; top: 20px; right: 20px; padding: 15px; background: white; border-left: 4px solid var(--success); box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none; z-index: 3000; }
-    </style>
-</head>
-<body>
+      let tiposPrevios = new Set();
+      let archivosViejos = [];
+      let gestionesCount = 0; // Para saber si es la primera vez que se toca esta sede
+      
+      const dataGestiones = sheetGestiones.getDataRange().getValues();
+      for(let i=1; i<dataGestiones.length; i++) {
+        if(String(dataGestiones[i][0]) === String(params.sedeNumero)) {
+          gestionesCount++;
+          let tipoHist = String(dataGestiones[i][1]).trim();
+          let urlHist = String(dataGestiones[i][3]).trim();
+          tiposPrevios.add(tipoHist);
+          archivosViejos.push({ tipo: tipoHist, url: urlHist });
+        }
+      }
 
-    <div class="container">
-        <header>
-            <img src="logo.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
-            <h1>Gestor de Sedes</h1>
-            <p>Secretaría de Participación Ciudadana</p>
-        </header>
+      let totalTiposAntes = tiposPrevios.size;
+      tiposPrevios.add(params.tipo.trim());
+      let totalTiposDespues = tiposPrevios.size;
 
-        <div class="stats">
-            <div class="stat-card"><h3>Total Sedes</h3><div class="number" id="statTotal">0</div></div>
-            <div class="stat-card"><h3>Sedes Sociales</h3><div class="number" id="statSocial">0</div></div>
-            <div class="stat-card"><h3>CDS</h3><div class="number" id="statCDS">0</div></div>
-            <div class="stat-card"><h3>Gestiones</h3><div class="number" id="statGestiones">0</div></div>
-        </div>
+      if (params.fileData) {
+        try {
+          const decodedData = Utilities.base64Decode(params.fileData);
+          const blob = Utilities.newBlob(decodedData, params.mimeType, params.fileName);
+          
+          const masterRoot = DriveApp.getFolderById(ID_MAESTRA); const accionRoot = DriveApp.getFolderById(ID_PLAN_ACCION); const indicativoRoot = DriveApp.getFolderById(ID_PLAN_INDICATIVO);
+          const sedeFolder = obtenerOCrearCarpeta(masterRoot, sedeNombre); const tipoFolder = obtenerOCrearCarpeta(sedeFolder, params.tipo);
+          const file = tipoFolder.createFile(blob); fileUrl = file.getUrl();
 
-        <div class="controls">
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Buscar por nombre, dirección o comuna...">
-            </div>
-            <button class="btn btn-primary" onclick="openSedeModal()">➕ Nueva Sede</button>
-            <button class="btn btn-primary" onclick="loadData()">🔄 Recargar</button>
-            <button class="btn btn-success" onclick="exportExcel()">📥 Excel</button>
-        </div>
-
-        <div class="table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">No.</th>
-                        <th>Bien Inmueble</th>
-                        <th>Comuna</th>
-                        <th>Dirección / Uso</th>
-                        <th>Ocupante</th>
-                        <th style="width: 250px;">Gestiones Realizadas</th>
-                        <th style="width: 140px;">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="loader" class="loader-overlay"><div class="spinner"></div><p>Procesando...</p></div>
-    <div id="toast" class="toast">Notificación</div>
-
-    <div id="modalSede" class="modal">
-        <div class="modal-content">
-            <button class="close-btn" onclick="closeModal('modalSede')">×</button>
-            <h2 class="modal-title" id="modalSedeTitle">Nueva Sede</h2>
-            <form id="formSede" onsubmit="event.preventDefault(); saveSede();">
-                <input type="hidden" id="originalNumero">
-                <div class="form-grid">
-                    <div class="form-group"><label>Número</label><input type="number" id="numero" required></div>
-                    <div class="form-group"><label>Nombre</label><input type="text" id="nombre" required></div>
-                    <div class="form-group"><label>Comuna</label><input type="text" id="comuna" required></div>
-                    <div class="form-group"><label>Uso</label><input type="text" id="uso" required></div>
-                    <div class="form-group full"><label>Dirección</label><input type="text" id="direccion" required></div>
-                    <div class="form-group full"><label>Ocupante</label><input type="text" id="ocupante"></div>
-                    <div class="form-group full"><label>Observaciones</label><textarea id="observaciones"></textarea></div>
-                </div>
-                <div style="text-align: right; margin-top: 15px;">
-                    <button type="submit" class="btn btn-primary">Guardar Datos</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="modalGestiones" class="modal">
-        <div class="modal-content wide">
-            <button class="close-btn" onclick="closeModal('modalGestiones')">×</button>
-            <h2 class="modal-title" id="gestionTitle">Gestiones</h2>
+          // B. PLAN DE ACCIÓN: ¡Solo 1 archivo en la historia por Sede!
+          if (gestionesCount === 0) {
+             file.makeCopy(`${sedeNombre} - ${params.tipo}.pdf`, accionRoot);
+          }
+          
+          // C. PLAN INDICATIVO: Evaluamos si cumple tener 2 o más tipos diferentes
+          if (totalTiposDespues >= 2) {
+            const indSedeFolder = obtenerOCrearCarpeta(indicativoRoot, sedeNombre);
+            const indTipoFolder = obtenerOCrearCarpeta(indSedeFolder, params.tipo);
+            file.makeCopy(params.fileName, indTipoFolder);
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                <div style="background: #fdfdfd; padding: 15px; border: 1px solid #eee; border-radius: 6px;">
-                    <h4 style="margin-top: 0; color: #e67e22;">📝 Registrar Nueva</h4>
-                    <form id="formGestion">
-                        <div class="form-group">
-                            <label>Tipo</label>
-                            <select id="gTipo">
-                                <option>Supervisión Técnica Muebles</option>
-                                <option>Supervisión Técnica Inmuebles</option>
-                                <option>Mantenimiento</option>
-                                <option>Comodato Muebles</option>
-                                <option>Comodato Inmuebles</option>
-                                <option>Servicios Públicos</option>
-                                <option>Pago conectividad</option>
-                                <option>Pago Tasa de Seguridad</option>
-                                <option>Traslado de sede</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Fecha</label>
-                            <input type="date" id="gFecha">
-                        </div>
-                        <div class="form-group">
-                            <label>Evidencia (PDF - Máx 5MB)</label>
-                            <input type="file" id="gArchivo" accept="application/pdf">
-                        </div>
-                        <div class="form-group">
-                            <label>Notas</label>
-                            <textarea id="gNotas" rows="2"></textarea>
-                        </div>
-                        <button type="button" class="btn btn-folder" style="width:100%" onclick="saveGestion()">Guardar Gestión</button>
-                    </form>
-                </div>
-
-                <div>
-                    <h4 style="margin-top: 0; color: var(--text-dark);">📂 Historial</h4>
-                    <div id="listHistory" class="historial-list"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbw0DaNH-5gHedVrBePcDpmM4IjMleOZ7xpkviSfVAJ8TeKLdqyqEYS3noT39Lm9YdSh/exec"; 
-
-        let allData = []; 
-        let currentSedeId = null;
-        let isEditing = false;
-
-        function escapeHTML(str) {
-            if (str === null || str === undefined) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
-        async function loadData() {
-            document.getElementById('loader').style.display = 'flex';
-            try {
-                const res = await fetch(API_URL);
-                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
-                const data = await res.json();
-                if(Array.isArray(data)) {
-                    allData = data;
-                    renderTable();
-                    updateStats();
+            // EL RESCATE RETROACTIVO (Si acaba de cumplir la meta de 2)
+            if (totalTiposAntes === 1 && totalTiposDespues === 2) {
+              for (let viejo of archivosViejos) {
+                let urlsV = viejo.url.split(',');
+                for (let uv of urlsV) {
+                  let matchV = uv.match(/[-\w]{25,}/);
+                  if (matchV) {
+                    try {
+                      let fileViejo = DriveApp.getFileById(matchV[0]);
+                      let indTipoViejo = obtenerOCrearCarpeta(indSedeFolder, viejo.tipo);
+                      fileViejo.makeCopy(fileViejo.getName(), indTipoViejo);
+                    } catch(e) {}
+                  }
                 }
-            } catch(e) {
-                console.error(e);
-                alert("Error de conexión. Es posible que el servidor esté saturado, inténtalo de nuevo.");
-            } finally {
-                document.getElementById('loader').style.display = 'none';
+              }
             }
-        }
+          }
+        } catch(err) { return sendJSON({ status: 'error', message: 'Error subiendo a Drive: ' + err.message }); }
+      }
 
-        function renderTable() {
-            const term = document.getElementById('searchInput').value.toLowerCase();
-            const tbody = document.getElementById('tableBody');
-            tbody.innerHTML = '';
+      sheetGestiones.appendRow([params.sedeNumero, params.tipo, params.fecha, fileUrl, params.notas]);
+      return sendJSON({ status: 'success', message: 'Gestión guardada exitosamente' });
+    }
 
-            const filtered = allData.filter(s => 
-                (s.nombre + s.direccion + s.comuna + s.ocupante).toLowerCase().includes(term)
-            );
-
-            filtered.forEach((sede, idx) => {
-                let gestionHTML = '<span class="tag empty">Sin gestiones</span>';
-                if (sede.gestiones && sede.gestiones.length > 0) {
-                    const counts = {};
-                    sede.gestiones.forEach(g => { counts[g.tipo] = (counts[g.tipo] || 0) + 1; });
-
-                    gestionHTML = '<div class="gestion-cell">';
-                    Object.entries(counts).forEach(([tipo, cant]) => {
-                        let colorClass = 'tag';
-                        const tipoLower = tipo.toLowerCase();
-                        
-                        if(tipoLower.includes('mantenimiento')) colorClass += ' orange';
-                        else if(tipoLower.includes('supervisión') || tipoLower.includes('supervision')) colorClass += ' green';
-                        else if(tipoLower.includes('comodato')) colorClass += ' purple';
-                        else if(tipoLower.includes('tasa de seguridad')) colorClass += ' red';
-                        else if(tipoLower.includes('servicios') || tipoLower.includes('pago')) colorClass += ' teal';
-                        else colorClass += ' blue';
-
-                        gestionHTML += `<span class="${colorClass}">${cant} ${escapeHTML(tipo)}</span>`;
-                    });
-                    gestionHTML += '</div>';
-                }
-
-                const safeNombre = escapeHTML(sede.nombre);
-                const safeComuna = escapeHTML(sede.comuna);
-                const safeDireccion = escapeHTML(sede.direccion);
-                const safeUso = escapeHTML(sede.uso);
-                const safeOcupante = escapeHTML(sede.ocupante);
-
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td><b>${sede.numero}</b></td>
-                    <td style="font-weight:bold; color:#2c3e50">${safeNombre}</td>
-                    <td>${safeComuna}</td>
-                    <td>
-                        <div>${safeDireccion}</div>
-                        <div style="font-size:0.85em; color:#777; margin-top:3px">${safeUso}</div>
-                    </td>
-                    <td><small>${safeOcupante || '-'}</small></td>
-                    <td>${gestionHTML}</td>
-                    <td>
-                        <div class="actions">
-                            <button class="btn btn-folder btn-sm" onclick="openGestiones(${sede.numero})" title="Ver Gestiones">📂</button>
-                            <button class="btn btn-secondary btn-sm" onclick="openEdit(${sede.numero})" title="Editar">✏️</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteSede(${sede.numero})" title="Borrar">🗑️</button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function openGestiones(id) {
-            currentSedeId = id;
-            const sede = allData.find(s => s.numero == id);
-            document.getElementById('gestionTitle').textContent = `Gestiones: ${sede.nombre}`;
-            renderHistory(sede.gestiones || []);
-            document.getElementById('modalGestiones').classList.add('active');
-        }
-
-        function renderHistory(list) {
-            const container = document.getElementById('listHistory');
-            if(list.length === 0) {
-                container.innerHTML = '<p style="text-align:center; color:#999; padding:10px;">No hay documentos.</p>';
-                return;
+    // --- BORRAR GESTIÓN ---
+    if (params.action === 'deleteGestion') {
+      const dataGestiones = sheetGestiones.getDataRange().getValues(); const dataSedes = sheetSedes.getDataRange().getValues(); let rowToDelete = -1;
+      for(let i = dataGestiones.length - 1; i >= 1; i--) { if(String(dataGestiones[i][0]) === String(params.sedeNumero) && String(dataGestiones[i][1]) === String(params.tipo) && String(dataGestiones[i][4]) === String(params.notas)) { rowToDelete = i + 1; break; } }
+      if(rowToDelete !== -1) {
+        const urlArchivo = String(dataGestiones[rowToDelete - 1][3]); const notasGestion = String(dataGestiones[rowToDelete - 1][4]); const esDesdeWeb = !notasGestion.includes("Form:");
+        if (esDesdeWeb && urlArchivo && urlArchivo.includes("drive.google.com")) {
+          try {
+            const matchId = urlArchivo.match(/\/d\/([-\w]{25,})/);
+            if (matchId) {
+              const fileMaestra = DriveApp.getFileById(matchId[1]); const nombreOriginal = fileMaestra.getName(); fileMaestra.setTrashed(true);
+              let sedeNombre = "Sede_Desconocida"; for(let i=1; i<dataSedes.length; i++) { if(String(dataSedes[i][0])===String(params.sedeNumero)) { sedeNombre = String(dataSedes[i][1]).trim(); break; } }
+              const accionFolder = DriveApp.getFolderById(ID_PLAN_ACCION); const accionFiles = accionFolder.searchFiles(`title = '${sedeNombre} - ${params.tipo}.pdf'`);
+              while (accionFiles.hasNext()) { accionFiles.next().setTrashed(true); }
+              const indicativoFolder = DriveApp.getFolderById(ID_PLAN_INDICATIVO); const indSedeFolders = indicativoFolder.getFoldersByName(sedeNombre);
+              if (indSedeFolders.hasNext()) {
+                const indTipoFolders = indSedeFolders.next().getFoldersByName(params.tipo);
+                if (indTipoFolders.hasNext()) { const indFiles = indTipoFolders.next().searchFiles(`title = '${nombreOriginal}'`); while (indFiles.hasNext()) { indFiles.next().setTrashed(true); } }
+              }
             }
-            
-            // Renderizamos el HTML asignando data-attributes en lugar de onclick (MEJORA DE SEGURIDAD XSS)
-            container.innerHTML = list.map(g => {
-                let fecha = g.fecha;
-                if(fecha && fecha.toString().includes('T')) fecha = fecha.toString().split('T')[0];
-                
-                let archivoLink = '';
-                if(g.archivo && g.archivo !== 'N/A' && g.archivo !== 'Sin archivo adjunto') {
-                    let links = g.archivo.split(',');
-                    archivoLink = links.map(link => {
-                        let url = link.trim();
-                        let safeUrl = escapeHTML(url);
-                        if(safeUrl.startsWith('http')) return `<a href="${safeUrl}" target="_blank" style="color: #e67e22; text-decoration: none; display: inline-block;">📎 Ver PDF</a>`;
-                        else return `<span>📎 ${safeUrl}</span>`;
-                    }).join('<br>');
-                }
-
-                const tipoVisible = escapeHTML(g.tipo);
-                const notasVisibles = escapeHTML(g.notas);
-
-                return `
-                <div class="historial-item">
-                    <div>
-                        <div style="font-weight:bold; color:#2180a1">${tipoVisible}</div>
-                        <div style="font-size:0.85em; color:#666">${fecha}</div>
-                        <div style="font-size:0.85em; font-style:italic">${notasVisibles}</div>
-                    </div>
-                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:5px;">
-                        ${archivoLink}
-                        <button class="btn-delete-gestion" data-tipo="${tipoVisible}" data-notas="${notasVisibles}" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size:0.85em; font-weight:bold;">🗑️ Borrar</button>
-                    </div>
-                </div>`;
-            }).join('');
-
-            // Asignamos los eventos de click de forma segura (MEJORA DE SEGURIDAD XSS)
-            const deleteBtns = container.querySelectorAll('.btn-delete-gestion');
-            deleteBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    // Extraemos los datos crudos del elemento seguro
-                    const rawTipo = this.getAttribute('data-tipo');
-                    const rawNotas = this.getAttribute('data-notas');
-                    
-                    // Decodificamos el HTML escape para enviar la cadena original a la función borrarGestion
-                    const decodedTipo = rawTipo.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
-                    const decodedNotas = rawNotas.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'");
-                    
-                    borrarGestion(decodedTipo, decodedNotas);
-                });
-            });
+          } catch(e) {}
         }
+        sheetGestiones.deleteRow(rowToDelete); return sendJSON({ status: 'success', message: esDesdeWeb ? 'Gestión y PDFs eliminados' : 'Gestión eliminada (PDF conservado)' });
+      } else return sendJSON({ status: 'error', message: 'No se encontró la gestión' });
+    }
 
-        async function borrarGestion(tipo, notas) {
-            if(!confirm("¿Seguro que deseas eliminar el registro de esta gestión?\n\n(Si fue subida desde la web, también se borrará el PDF de tu Drive. Si fue por formulario, el PDF se conservará)")) return;
-            const pass = prompt("🔐 Contraseña:");
-            if(!pass) return;
-
-            document.getElementById('loader').style.display = 'flex';
-            try {
-                const payload = { action: 'deleteGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, notas: notas };
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
-                const json = await res.json();
-                
-                if(json.status === 'success') {
-                    showToast(json.message || "Gestión eliminada");
-                    document.getElementById('modalGestiones').classList.remove('active');
-                    loadData(); 
-                } else alert(json.message);
-            } catch(e) { alert("Error al eliminar. Revisa tu conexión."); }
-            finally { document.getElementById('loader').style.display = 'none'; }
-        }
-
-        async function saveGestion() {
-            const tipo = document.getElementById('gTipo').value;
-            const fecha = document.getElementById('gFecha').value;
-            const archivoInput = document.getElementById('gArchivo');
-            const notas = document.getElementById('gNotas').value;
-
-            if(!fecha) return alert("Fecha obligatoria");
-            const pass = prompt("🔐 Contraseña:");
-            if(!pass) return;
-
-            document.getElementById('loader').style.display = 'flex';
-            let fileData = null; let mimeType = null; let fileName = "N/A";
-
-            async function enviarDatos() {
-                const payload = { action: 'addGestion', password: pass, sedeNumero: currentSedeId, tipo: tipo, fecha: fecha, fileName: fileName, fileData: fileData, mimeType: mimeType, notas: notas };
-                try {
-                    const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                    if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
-                    const json = await res.json();
-                    if(json.status === 'success') {
-                        showToast("Gestión guardada");
-                        document.getElementById('formGestion').reset();
-                        document.getElementById('modalGestiones').classList.remove('active');
-                        loadData(); 
-                    } else alert(json.message);
-                } catch(e) { alert("Error guardando la gestión. Revisa tu conexión."); }
-                finally { document.getElementById('loader').style.display = 'none'; }
-            }
-
-            if (archivoInput.files.length > 0) {
-                const file = archivoInput.files[0];
-                if (file.size > 5 * 1024 * 1024) { document.getElementById('loader').style.display = 'none'; return alert("Máximo 5MB."); }
-                fileName = file.name; mimeType = file.type;
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = function() { fileData = reader.result.split(',')[1]; enviarDatos(); };
-            } else enviarDatos();
-        }
-
-        function openSedeModal() {
-            isEditing = false;
-            document.getElementById('modalSedeTitle').textContent = "Nueva Sede";
-            document.getElementById('formSede').reset();
-            const max = allData.reduce((m, s) => Math.max(m, parseInt(s.numero)||0), 0);
-            document.getElementById('numero').value = max + 1;
-            document.getElementById('modalSede').classList.add('active');
-        }
-
-        function openEdit(id) {
-            isEditing = true;
-            const s = allData.find(x => x.numero == id);
-            if(!s) return alert("Error al encontrar la sede");
-            
-            document.getElementById('modalSedeTitle').textContent = "Editar Sede";
-            document.getElementById('originalNumero').value = s.numero;
-            document.getElementById('numero').value = s.numero;
-            document.getElementById('nombre').value = s.nombre;
-            document.getElementById('comuna').value = s.comuna;
-            document.getElementById('direccion').value = s.direccion;
-            document.getElementById('uso').value = s.uso;
-            document.getElementById('ocupante').value = s.ocupante;
-            document.getElementById('observaciones').value = s.observaciones;
-            document.getElementById('modalSede').classList.add('active');
-        }
-
-        async function saveSede() {
-            const pass = prompt("🔐 Contraseña:");
-            if(!pass) return;
-            const payload = {
-                action: isEditing ? 'edit' : 'add', password: pass,
-                originalNumero: document.getElementById('originalNumero').value,
-                numero: document.getElementById('numero').value, nombre: document.getElementById('nombre').value,
-                comuna: document.getElementById('comuna').value, direccion: document.getElementById('direccion').value,
-                uso: document.getElementById('uso').value, ocupante: document.getElementById('ocupante').value,
-                observaciones: document.getElementById('observaciones').value
-            };
-            document.getElementById('loader').style.display = 'flex';
-            try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
-                const json = await res.json();
-                if(json.status === 'success') { showToast("Guardado con éxito"); closeModal('modalSede'); loadData(); }
-                else alert(json.message);
-            } catch(e) { alert("Error de red de conexión."); }
-            finally { document.getElementById('loader').style.display = 'none'; }
-        }
-
-        async function deleteSede(id) {
-            if(!confirm("¿Eliminar esta sede?")) return;
-            const pass = prompt("🔐 Contraseña:");
-            if(!pass) return;
-            document.getElementById('loader').style.display = 'flex';
-            try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({action:'delete', password:pass, numero:id}) });
-                if (!res.ok) throw new Error(`HTTP Error: ${res.status}`); // MEJORA DE ESTABILIDAD
-                const json = await res.json();
-                if(json.status === 'success') { showToast("Eliminado"); loadData(); }
-                else alert(json.message);
-            } catch(e) { alert("Error de conexión al intentar eliminar."); }
-            finally { document.getElementById('loader').style.display = 'none'; }
-        }
-
-        function updateStats() {
-            document.getElementById('statTotal').textContent = allData.length;
-            document.getElementById('statSocial').textContent = allData.filter(s=> (s.uso||"").toUpperCase().includes("SOCIAL")).length;
-            document.getElementById('statCDS').textContent = allData.filter(s=> (s.uso||"").toUpperCase().includes("CENTRO")).length;
-            let totalG = 0; allData.forEach(s => { if(s.gestiones) totalG += s.gestiones.length; });
-            document.getElementById('statGestiones').textContent = totalG;
-        }
-
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
-        function showToast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000); }
-
-        function exportExcel() {
-            let csv = 'No;Bien inmueble;Comuna;Dirección completa;Destinación o uso del bien;Ocupación por terceros;Observaciones\n';
-            allData.forEach(sede => {
-                const clean = (text) => text ? text.toString().replace(/"/g, '""').replace(/;/g, ',') : '';
-                const linea = [ sede.numero, `"${clean(sede.nombre)}"`, `"${clean(sede.comuna)}"`, `"${clean(sede.direccion)}"`, `"${clean(sede.uso)}"`, `"${clean(sede.ocupante)}"`, `"${clean(sede.observaciones)}"` ].join(';');
-                csv += linea + '\n';
-            });
-            const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.setAttribute('href', URL.createObjectURL(blob));
-            link.setAttribute('download', `sedes_medellin_${new Date().toISOString().slice(0,10)}.csv`);
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
-            showToast('✅ Excel exportado');
-        }
-
-        document.getElementById('searchInput').addEventListener('input', renderTable);
-        loadData();
-    </script>
-</body>
-</html>
+    if (params.action === 'add') { sheetSedes.appendRow([params.numero, params.nombre, params.comuna, params.direccion, params.uso, params.ocupante, params.observaciones]); return sendJSON({ status: 'success', message: 'Sede agregada' }); }
+    if (params.action === 'edit') { const data = sheetSedes.getDataRange().getValues(); let rowIndex = -1; for(let i=1; i<data.length; i++) { if(String(data[i][0])==String(params.originalNumero) || String(data[i][0])==String(params.numero)) { rowIndex=i+1; break; } } if (rowIndex===-1) return sendJSON({status:'error', message:'Sede no encontrada'}); sheetSedes.getRange(rowIndex, 1, 1, 7).setValues([[params.numero, params.nombre, params.comuna, params.direccion, params.uso, params.ocupante, params.observaciones]]); return sendJSON({ status: 'success', message: 'Sede actualizada' }); }
+    if (params.action === 'delete') { const data = sheetSedes.getDataRange().getValues(); let rowIndex = -1; for(let i=1; i<data.length; i++) { if(String(data[i][0])==String(params.numero)) { rowIndex=i+1; break; } } if (rowIndex===-1) return sendJSON({status:'error', message:'Sede no encontrada'}); sheetSedes.deleteRow(rowIndex); return sendJSON({ status: 'success', message: 'Sede eliminada' }); }
+  } catch (e) { return sendJSON({ status: 'error', message: "Error interno: " + e.toString() }); } finally { lock.releaseLock(); }
+}
+function sendJSON(content) { return ContentService.createTextOutput(JSON.stringify(content)).setMimeType(ContentService.MimeType.JSON); }
+function obtenerOCrearCarpeta(parentFolder, folderName) { const carpetas = parentFolder.getFoldersByName(folderName); return carpetas.hasNext() ? carpetas.next() : parentFolder.createFolder(folderName); }
