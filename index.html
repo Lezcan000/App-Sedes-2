@@ -63,6 +63,8 @@
         .tag.green { background: #f1f8e9; color: #33691e; border: 1px solid #dcedc8; }
         .tag.purple { background: #f3e5f5; color: #4a148c; border: 1px solid #e1bee7; }
         .tag.teal { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
+        /* NUEVO COLOR ROJO PARA TASA DE SEGURIDAD */
+        .tag.red { background: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
 
         .actions { display: flex; gap: 5px; }
         .btn-sm { padding: 5px 8px; font-size: 0.8em; }
@@ -171,12 +173,14 @@
                         <div class="form-group">
                             <label>Tipo</label>
                             <select id="gTipo">
-                                <option>Supervisión Técnica</option>
+                                <option>Supervisión Técnica Muebles</option>
+                                <option>Supervisión Técnica Inmuebles</option>
                                 <option>Mantenimiento</option>
                                 <option>Comodato Muebles</option>
                                 <option>Comodato Inmuebles</option>
                                 <option>Servicios Públicos</option>
                                 <option>Pago conectividad</option>
+                                <option>Pago Tasa de Seguridad</option>
                                 <option>Traslado de sede</option>
                             </select>
                         </div>
@@ -211,7 +215,6 @@
         let currentSedeId = null;
         let isEditing = false;
 
-        // Función purificadora para evitar códigos maliciosos o errores de formato
         function escapeHTML(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -260,19 +263,19 @@
                         let colorClass = 'tag';
                         const tipoLower = tipo.toLowerCase();
                         
+                        // LÓGICA DE COLORES ACTUALIZADA
                         if(tipoLower.includes('mantenimiento')) colorClass += ' orange';
                         else if(tipoLower.includes('supervisión') || tipoLower.includes('supervision')) colorClass += ' green';
                         else if(tipoLower.includes('comodato')) colorClass += ' purple';
+                        else if(tipoLower.includes('tasa de seguridad')) colorClass += ' red';
                         else if(tipoLower.includes('servicios') || tipoLower.includes('pago')) colorClass += ' teal';
                         else colorClass += ' blue';
 
-                        // Escapamos también el tipo por seguridad
                         gestionHTML += `<span class="${colorClass}">${cant} ${escapeHTML(tipo)}</span>`;
                     });
                     gestionHTML += '</div>';
                 }
 
-                // Aplicamos el filtro purificador a todos los textos de la tabla
                 const safeNombre = escapeHTML(sede.nombre);
                 const safeComuna = escapeHTML(sede.comuna);
                 const safeDireccion = escapeHTML(sede.direccion);
@@ -325,18 +328,15 @@
                     let links = g.archivo.split(',');
                     archivoLink = links.map(link => {
                         let url = link.trim();
-                        // Escapamos la URL para evitar ataques de inyección de enlaces
                         let safeUrl = escapeHTML(url);
                         if(safeUrl.startsWith('http')) return `<a href="${safeUrl}" target="_blank" style="color: #e67e22; text-decoration: none; display: inline-block;">📎 Ver PDF</a>`;
                         else return `<span>📎 ${safeUrl}</span>`;
                     }).join('<br>');
                 }
 
-                // Escapamos los textos visibles en el historial
                 const tipoVisible = escapeHTML(g.tipo);
                 const notasVisibles = escapeHTML(g.notas);
                 
-                // Mantenemos esta variable interna segura para la función de borrar
                 const safeTipo = g.tipo ? g.tipo.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
                 const safeNotas = g.notas ? g.notas.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
 
@@ -422,7 +422,6 @@
             document.getElementById('modalSede').classList.add('active');
         }
 
-        // CORRECCIÓN: Ahora recibe el número (ID) de la sede, no la posición del array
         function openEdit(id) {
             isEditing = true;
             const s = allData.find(x => x.numero == id);
